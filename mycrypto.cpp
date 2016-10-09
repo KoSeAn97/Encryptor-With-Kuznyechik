@@ -109,26 +109,13 @@ ByteBlock join_blocks(const vector<ByteBlock> & blocks) {
     return tmp;
 }
 
-template <typename CipherType>
-void CFB_Mode<CipherType>::encrypt(const ByteBlock & src, ByteBlock & dst) {
-    auto blocks = split_blocks(src, CipherType::block_lenght);
-    ByteBlock tmp;
-
-    algorithm.encrypt(iv, tmp);
-    xor128(tmp, tmp, blocks[0]);
-    blocks[0] = tmp;
-    for(int i = 1; i < blocks.size(); i++) {
-        algorithm.encrypt(blocks[i-1], tmp);
-        xor128(tmp, tmp, blocks[i]);
-        blocks[i] = tmp;
-    }
-    dst = join_blocks(blocks);
+void xor_blocks(ByteBlock & to_assign, const ByteBlock & lhs, const ByteBlock & rhs) {
+    size_t result_size = lhs.size() > rhs.size() ? rhs.size() : lhs.size();
+    ByteBlock tmp(result_size);
+    for(size_t i = 0; i < result_size; i++)
+        tmp[i] = lhs[i] ^ rhs[i];
+    to_assign = std::move(tmp);
 }
-template <typename CipherType>
-void CFB_Mode<CipherType>::decrypt(const ByteBlock & src, ByteBlock & dst) {
-
-}
-
 
 inline char to_hex_literal(BYTE number) {
     if(number < 10) return '0' + number;

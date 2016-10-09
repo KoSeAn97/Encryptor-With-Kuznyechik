@@ -9,8 +9,9 @@
 class Kuznyechik {
 	std::vector<ByteBlock> keys;
 	static bool is_init;
-    static const int block_lenght {BLOCK_LENGTH};
 public:
+	static const int block_lenght {BLOCK_LENGTH};
+
 	Kuznyechik(const ByteBlock & key);
     Kuznyechik(const Kuznyechik & rhs) {
         is_init = rhs.is_init;

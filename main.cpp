@@ -19,9 +19,13 @@ int main() {
 		ByteBlock themsg = hex_to_bytes(
 			"1122334455667700ffeeddccbbaa9988"
 		);
-		ByteBlock thect;
-		Kuznyechik encryptor(thekey);
-		Kuznyechik sec = std::move(encryptor);
+		ByteBlock iv = hex_to_bytes(
+			"abcdef12345600dacdef94756eeabefa"
+		);
+		CFB_Mode<Kuznyechik> encryptor(Kuznyechik(thekey), iv);
+		ByteBlock output;
+		encryptor.encrypt(thekey, output);
+		cout << hex_representation(output) << endl;
 	} catch(const std::exception & e) {
 		cerr << e.what() << endl;
 	}

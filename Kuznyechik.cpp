@@ -59,6 +59,7 @@ void init_consts();
 void nonlinear_transform_direct128(BYTE * target);
 void nonlinear_transform_inverse128(BYTE * target);
 WORD multiply(WORD lhs, WORD rhs);
+void xor128(BYTE * dst, const BYTE * lhs, const BYTE * rhs);
 BYTE linear_transform_core128(const BYTE * target);
 void linear_transform_direct128(BYTE * target);
 void linear_transform_inverse128(BYTE * target);

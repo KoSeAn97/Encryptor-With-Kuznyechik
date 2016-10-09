@@ -58,12 +58,23 @@ public:
         memcpy(tmp, pBlocks + begin, length);
         return tmp;
     }
+
+	friend void swap(ByteBlock & lhs, ByteBlock & rhs) {
+		BYTE * p = lhs.pBlocks;
+		size_t s = lhs.amount_of_bytes;
+		lhs.pBlocks = rhs.pBlocks;
+		lhs.amount_of_bytes = rhs.amount_of_bytes;
+		rhs.pBlocks = p;
+		rhs.amount_of_bytes = s;
+	}
 };
 
 string hex_representation(const ByteBlock & bb);
 ByteBlock hex_to_bytes(string s);
-void xor128(BYTE * dst, const BYTE * lhs, const BYTE * rhs);
 
+std::vector<ByteBlock> split_blocks(const ByteBlock & src, size_t length);
+ByteBlock join_blocks(const std::vector<ByteBlock> & blocks);
+void xor_blocks(ByteBlock & to_assign, const ByteBlock & lhs, const ByteBlock & rhs);
 
 template <typename CipherType>
 class CFB_Mode {
@@ -78,5 +89,38 @@ public:
     void encrypt(const ByteBlock & src, ByteBlock & dst);
     void decrypt(const ByteBlock & src, ByteBlock & dst);
 };
+
+template <typename CipherType>
+void CFB_Mode<CipherType>::encrypt(const ByteBlock & src, ByteBlock & dst) {
+    auto blocks = split_blocks(src, CipherType::block_lenght);
+    ByteBlock tmp;
+
+    algorithm.encrypt(iv, tmp);
+    xor_blocks(tmp, tmp, blocks[0]);
+    blocks[0] = std::move(tmp);
+    for(int i = 1; i < blocks.size(); i++) {
+        algorithm.encrypt(blocks[i-1], tmp);
+        xor_blocks(tmp, tmp, blocks[i]);
+        blocks[i] = std::move(tmp);
+    }
+    //blocks.insert(blocks.begin(), iv.deep_copy());
+    dst = join_blocks(blocks);
+}
+
+template <typename CipherType>
+void CFB_Mode<CipherType>::decrypt(const ByteBlock & src, ByteBlock & dst) {
+	auto blocks = split_blocks(src, CipherType::block_lenght);
+	ByteBlock tmp;
+
+	algorithm.encrypt(iv, tmp);
+	xor_blocks(tmp, blocks[0], tmp);
+	swap(tmp, blocks[0]);
+	for(int i = 1; i < blocks.size(); i++) {
+		algorithm.encrypt(tmp, tmp);
+		xor_blocks(tmp, blocks[i], tmp);
+		swap(tmp, blocks[i]);
+	}
+	dst = join_blocks(blocks);
+}
 
 #endif
