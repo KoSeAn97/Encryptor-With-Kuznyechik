@@ -1,11 +1,18 @@
+#include <stdexcept>
+
 #include <vector>
+using std::vector;
+
 #include <map>
+using std::map;
+
+#include <iostream>
+using std::cerr;
+using std::endl;
 
 #include "Kuznyechik.hpp"
 #include "mycrypto.hpp"
 
-using std::vector;
-using std::map;
 
 bool Kuznyechik::is_init = false;
 
@@ -37,7 +44,7 @@ const vector<BYTE> nonlinear_transform_perm = {
 	244, 180, 192, 209, 102, 175, 194, 57, 75, 99,
 	182
 };
-const map<WORD, WORD> direct_permutation, inverse_permutation;
+const map<BYTE, BYTE> direct_permutation, inverse_permutation;
 
 const vector<WORD> linear_transform_coeff = {
 	148, 32, 133, 16, 194, 192, 1, 251, 1, 192,
@@ -47,13 +54,73 @@ const WORD linear_transform_modulus = 0x1C3;
 
 const vector<ByteBlock> iteration_constants;
 
+void init_perms();
+void init_consts();
+void nonlinear_transform_direct128(BYTE * target);
+void nonlinear_transform_inverse128(BYTE * target);
+WORD multiply(WORD lhs, WORD rhs);
+BYTE linear_transform_core128(const BYTE * target);
+void linear_transform_direct128(BYTE * target);
+void linear_transform_inverse128(BYTE * target);
+void iteration_linear_transform_direct128(BYTE * target);
+void iteration_linear_transform_inverse128(BYTE * target);
+void encrypt128(BYTE * target, const vector<ByteBlock> & keys);
+void decrypt128(BYTE * target, const vector<ByteBlock> & keys);
+void keys_transform128(BYTE * k1, BYTE * k2, int iconst);
+void key_derivation128(BYTE * k1, BYTE * k2, BYTE * k3, BYTE * k4, int ipair);
+
+
+Kuznyechik::Kuznyechik(const ByteBlock & key) :
+    keys(10)
+{
+    if(key.size() != 32)
+        throw std::invalid_argument("The key must be 32 bytes long");
+    if(!is_init) {
+        init_perms();
+        init_consts();
+        is_init = true;
+    }
+    keys[0].reset(key, BLOCK_LENGTH);
+    keys[1].reset(key + BLOCK_LENGTH, BLOCK_LENGTH);
+    for(int i = 0; i < 4; i++) {
+        keys[2 * i + 2] = ByteBlock(BLOCK_LENGTH);
+        keys[2 * i + 3] = ByteBlock(BLOCK_LENGTH);
+        key_derivation128(keys[2 * i], keys[2 * i + 1], keys[2 * i + 2], keys[2 * i + 3], i);
+    }
+}
+Kuznyechik::~Kuznyechik() {}
+
+void Kuznyechik::encrypt(const ByteBlock & src, ByteBlock & dst) const {
+    if(src.size() != BLOCK_LENGTH)
+        throw std::invalid_argument("The block must be 16 bytes length");
+    if(dst != src) dst = src.deep_copy();
+    encrypt128(dst, keys);
+}
+void Kuznyechik::decrypt(const ByteBlock & src, ByteBlock & dst) const {
+    if(src.size() != BLOCK_LENGTH)
+        throw std::invalid_argument("The block must be 16 bytes length");
+    if(dst != src) dst = src.deep_copy();
+    decrypt128(dst, keys);
+}
+
 void init_perms() {
-	map<WORD, WORD> *p_direct, *p_inverse;
-	p_direct = const_cast< map<WORD, WORD> * >(&direct_permutation);
-	p_inverse = const_cast< map<WORD, WORD> * >(&inverse_permutation);
+	map<BYTE, BYTE> *p_direct, *p_inverse;
+	p_direct = const_cast< map<BYTE, BYTE> * >(&direct_permutation);
+	p_inverse = const_cast< map<BYTE, BYTE> * >(&inverse_permutation);
 	for(int i = 0; i < nonlinear_transform_perm.size(); i++) {
 		(*p_direct)[i] = nonlinear_transform_perm[i];
 		(*p_inverse)[nonlinear_transform_perm[i]] = i;
+	}
+}
+
+void init_consts() {
+	vector<ByteBlock> * p = const_cast< vector<ByteBlock> * >(&iteration_constants);
+    ByteBlock v128;
+    for(BYTE i = 1; i <= 32; i++) {
+        v128 = ByteBlock(BLOCK_LENGTH, 0);
+		v128[BLOCK_LENGTH - 1] = i;
+        iteration_linear_transform_direct128(v128);
+		p->push_back(std::move(v128));
 	}
 }
 
@@ -62,6 +129,22 @@ void xor128(BYTE * dst, const BYTE * lhs, const BYTE * rhs) {
 	while(dst != p_end) {
 		*(dst++) = *(lhs++) ^ *(rhs++);
 	}
+}
+WORD multiply(WORD lhs, WORD rhs) {
+    WORD detecter = 0x1, result = 0;
+    for(int i = 0; i < 8; i++) {
+        if(rhs & detecter) result ^= lhs << i;
+        detecter <<= 1;
+    }
+    for(int j = 8; j > 0; j--) {
+        WORD detecter2 = detecter;
+        for(int i = 0; i < j; i++) {
+            if(result & detecter2)
+                result ^= linear_transform_modulus << i;
+            detecter2 <<= 1;
+        }
+    }
+    return result;
 }
 void nonlinear_transform_direct128(BYTE * target) {
 	BYTE * p_end = target + BLOCK_LENGTH;
@@ -77,64 +160,53 @@ void nonlinear_transform_inverse128(BYTE * target) {
 		target++;
 	}
 }
-BYTE linear_transform_core_direct128(const BYTE * target) {
-	BYTE result = 0;
-	for(int i = 0; i < BLOCK_LENGTH; i++)
-		result ^= (*target * linear_transform_coeff[i]) % linear_transform_modulus;
 
-	return result;
-}
-BYTE linear_transform_core_inverse128(const BYTE * target) {
-	BYTE result = 0;
-	const BYTE * p_begin = target++;
-	for(int i = 0; i < 15; i++)
-		result ^= (*target * linear_transform_coeff[i]) % linear_transform_modulus;
-	result ^= (*p_begin * linear_transform_coeff[15]) % linear_transform_modulus;
-
+BYTE linear_transform_core128(const BYTE * target) {
+	WORD result = 0;
+	for(int i = 0; i < BLOCK_LENGTH; i++) {
+        result ^= multiply(target[i], linear_transform_coeff[i]);
+    }
 	return result;
 }
 
 void linear_transform_direct128(BYTE * target) {
-	BYTE buffer = linear_transform_core_direct128(target);
+	BYTE buffer = linear_transform_core128(target);
 	for(int i = BLOCK_LENGTH - 1; i > 0; i--)
 		target[i] = target[i-1];
 	*target = buffer;
 }
-void linear_tranform_inverse128(BYTE * target) {
+void linear_transform_inverse128(BYTE * target) {
 	BYTE buffer = *target;
 	for(int i = 0; i < BLOCK_LENGTH - 1; i++)
 		target[i] = target[i+1];
 	target[15] = buffer;
-	buffer = linear_transform_core_inverse128(target);
-	target[15] = buffer;
+	target[15] = linear_transform_core128(target);
 }
 
-void encrypt128(BYTE * target, vector<ByteBlock> & keys) {
+void iteration_linear_transform_direct128(BYTE * target) {
+    for(int i = 0; i < BLOCK_LENGTH; i++)
+        linear_transform_direct128(target);
+}
+void iteration_linear_transform_inverse128(BYTE * target) {
+    for(int i = 0; i < BLOCK_LENGTH; i++)
+        linear_transform_inverse128(target);
+}
+
+void encrypt128(BYTE * target, const vector<ByteBlock> & keys) {
 	xor128(target, target, keys[0]);
 	for(int i = 1; i < 10; i++) {
 		nonlinear_transform_direct128(target);
-		linear_transform_direct128(target);
+		iteration_linear_transform_direct128(target);
 		xor128(target, target, keys[i]);
 	}
 }
 
-void decrypt128(BYTE * target, vector<ByteBlock> & keys) {
+void decrypt128(BYTE * target, const vector<ByteBlock> & keys) {
 	xor128(target, target, keys[9]);
-	for(int i = 8; i >= 0; i++) {
-		linear_tranform_inverse128(target);
-		nonlinear_transform_inverse128(target);
-		xor128(target, target, keys[i]);
-	}
-}
-
-void init_consts() {
-	vector<ByteBlock> * p = const_cast< vector<ByteBlock> * >(&iteration_constants);
-    ByteBlock v128;
-    for(BYTE i = 1; i <= 32; i++) {
-        v128 = ByteBlock(BLOCK_LENGTH, 0);
-		v128[BLOCK_LENGTH - 1] = i;
-		linear_transform_direct128(v128);
-		p->push_back(std::move(v128));
+	for(int i = 8; i >= 0; i--) {
+		iteration_linear_transform_inverse128(target);
+        nonlinear_transform_inverse128(target);
+        xor128(target, target, keys[i]);
 	}
 }
 
@@ -143,7 +215,7 @@ void keys_transform128(BYTE * k1, BYTE * k2, int iconst) {
 	memcpy(buffer, k1, BLOCK_LENGTH);
 	xor128(k1, k1, iteration_constants[iconst]);
 	nonlinear_transform_direct128(k1);
-	linear_transform_direct128(k1);
+	iteration_linear_transform_direct128(k1);
 	xor128(k1, k2, k1);
 	memcpy(k2, buffer, BLOCK_LENGTH);
 }
@@ -152,33 +224,6 @@ void key_derivation128(BYTE * k1, BYTE * k2, BYTE * k3, BYTE * k4, int ipair) {
 	if(k1 != k3) memcpy(k3, k1, BLOCK_LENGTH);
 	if(k2 != k4) memcpy(k4, k2, BLOCK_LENGTH);
 	for(int i = 0; i < 8; i++) {
-		keys_transform128(k3, k4, ipair + i);
+		keys_transform128(k3, k4, ipair * 8 + i);
 	}
-}
-
-Kuznyechik::Kuznyechik(const ByteBlock & key) :
-    keys(10)
-{
-    if(key.size() != 32) throw string("bad argument");
-    if(!is_init) {
-        init_perms();
-        init_consts();
-        is_init = true;
-    }
-    keys[0].reset(key, BLOCK_LENGTH);
-    keys[1].reset(key + BLOCK_LENGTH, BLOCK_LENGTH);
-    for(int i = 0; i < 4; i++)
-        key_derivation128(keys[i], keys[i+1], keys[i+2], keys[i+3], i);
-}
-Kuznyechik::~Kuznyechik() {}
-
-void Kuznyechik::encrypt(const ByteBlock & src, ByteBlock & dst) {
-    if(src.size() != BLOCK_LENGTH) throw 2;
-    if(dst != src) dst = src.deep_copy();
-    encrypt128(dst, keys);
-}
-void Kuznyechik::decrypt(const ByteBlock & src, ByteBlock & dst) {
-    if(src.size() != BLOCK_LENGTH) throw 2;
-    if(dst != src) dst = src.deep_copy();
-    decrypt128(dst, keys);
 }

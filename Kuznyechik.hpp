@@ -9,11 +9,17 @@
 class Kuznyechik {
 	std::vector<ByteBlock> keys;
 	static bool is_init;
+    static const int block_lenght {BLOCK_LENGTH};
 public:
 	Kuznyechik(const ByteBlock & key);
+    Kuznyechik(const Kuznyechik & rhs) {
+        is_init = rhs.is_init;
+        for(auto & iter_key : rhs.keys)
+            keys.push_back(iter_key.deep_copy());
+    }
 	~Kuznyechik();
-	void encrypt(const ByteBlock & src, ByteBlock & dst);
-	void decrypt(const ByteBlock & src, ByteBlock & dst);
+	void encrypt(const ByteBlock & src, ByteBlock & dst) const;
+	void decrypt(const ByteBlock & src, ByteBlock & dst) const;
 };
 
 #endif
