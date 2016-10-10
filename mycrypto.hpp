@@ -19,8 +19,8 @@ public:
     // The value will be copied, source stays untouchable
     ByteBlock(BYTE * pBlocks_, size_t size_);
 
-    // Move constructer
-    // Copy constructer thus implicitly deleted
+    // Move constructor
+    // Copy constructor thus implicitly deleted
     // Object to move turn to null
     ByteBlock(ByteBlock && rhs);
 
@@ -53,74 +53,38 @@ public:
     // points to different place in memory
     ByteBlock deep_copy() const;
 
-    ByteBlock operator () (size_t begin, size_t length) const {
-        ByteBlock tmp(length);
-        memcpy(tmp, pBlocks + begin, length);
-        return tmp;
-    }
+	// It'll return slice of current ByteBlock
+    ByteBlock operator () (size_t begin, size_t length) const;
 
-	friend void swap(ByteBlock & lhs, ByteBlock & rhs) {
-		BYTE * p = lhs.pBlocks;
-		size_t s = lhs.amount_of_bytes;
-		lhs.pBlocks = rhs.pBlocks;
-		lhs.amount_of_bytes = rhs.amount_of_bytes;
-		rhs.pBlocks = p;
-		rhs.amount_of_bytes = s;
-	}
+	// Changes values between two ByteBlock-s
+	friend void swap(ByteBlock & lhs, ByteBlock & rhs);
 };
 
-string hex_representation(const ByteBlock & bb);
-ByteBlock hex_to_bytes(string s);
-
+// Some functions which will be useful for implementation of encryption algorithms
 std::vector<ByteBlock> split_blocks(const ByteBlock & src, size_t length);
 ByteBlock join_blocks(const std::vector<ByteBlock> & blocks);
 void xor_blocks(ByteBlock & to_assign, const ByteBlock & lhs, const ByteBlock & rhs);
 
+// Some I/O functions to work with hex representation of ByteBlock
+string hex_representation(const ByteBlock & bb);
+ByteBlock hex_to_bytes(string s);
+
+// Template class that provides implementation of Cipher Feadback mode
+// of operation with any block cipher (algorithm) which saticfy several
+// requirement. It must have got:
+// copy constructor, methods encrypt and decrypt with the same interface
+// and public member-data block_lenght
 template <typename CipherType>
 class CFB_Mode {
     CipherType algorithm;
     ByteBlock iv;
 public:
-    CFB_Mode(const CipherType & alg, const ByteBlock & init_vec) :
-        algorithm(alg), iv(init_vec.deep_copy())
-    {
-        // nothing
-    }
-    void encrypt(const ByteBlock & src, ByteBlock & dst);
-    void decrypt(const ByteBlock & src, ByteBlock & dst);
+    CFB_Mode(const CipherType & alg, const ByteBlock & init_vec);
+    void encrypt(const ByteBlock & src, ByteBlock & dst) const;
+    void decrypt(const ByteBlock & src, ByteBlock & dst) const;
 };
 
-template <typename CipherType>
-void CFB_Mode<CipherType>::encrypt(const ByteBlock & src, ByteBlock & dst) {
-    auto blocks = split_blocks(src, CipherType::block_lenght);
-    ByteBlock tmp;
-
-    algorithm.encrypt(iv, tmp);
-    xor_blocks(tmp, tmp, blocks[0]);
-    blocks[0] = std::move(tmp);
-    for(int i = 1; i < blocks.size(); i++) {
-        algorithm.encrypt(blocks[i-1], tmp);
-        xor_blocks(tmp, tmp, blocks[i]);
-        blocks[i] = std::move(tmp);
-    }
-    //blocks.insert(blocks.begin(), iv.deep_copy());
-    dst = join_blocks(blocks);
-}
-
-template <typename CipherType>
-void CFB_Mode<CipherType>::decrypt(const ByteBlock & src, ByteBlock & dst) {
-	auto blocks = split_blocks(src, CipherType::block_lenght);
-	ByteBlock tmp;
-
-	algorithm.encrypt(iv, tmp);
-	xor_blocks(tmp, blocks[0], tmp);
-	swap(tmp, blocks[0]);
-	for(int i = 1; i < blocks.size(); i++) {
-		algorithm.encrypt(tmp, tmp);
-		xor_blocks(tmp, blocks[i], tmp);
-		swap(tmp, blocks[i]);
-	}
-	dst = join_blocks(blocks);
-}
+// Implementations of modes of encryption
+#include "modes.hpp"
 
 #endif

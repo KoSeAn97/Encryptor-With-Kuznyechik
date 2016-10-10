@@ -88,24 +88,47 @@ ByteBlock ByteBlock::deep_copy() const {
     return ByteBlock(pBlocks, amount_of_bytes);
 }
 
+ByteBlock ByteBlock::operator () (size_t begin, size_t length) const {
+    ByteBlock tmp(length);
+    memcpy(tmp, pBlocks + begin, length);
+    return tmp;
+}
+
+void swap(ByteBlock & lhs, ByteBlock & rhs) {
+    BYTE * p = lhs.pBlocks;
+    size_t s = lhs.amount_of_bytes;
+    lhs.pBlocks = rhs.pBlocks;
+    lhs.amount_of_bytes = rhs.amount_of_bytes;
+    rhs.pBlocks = p;
+    rhs.amount_of_bytes = s;
+}
 
 vector<ByteBlock> split_blocks(const ByteBlock & src, size_t length) {
     vector<ByteBlock> tmp;
     int amount = src.size() / length;
+    int tail = src.size() % length;
     for(int i = 0; i < amount; i++)
         tmp.push_back(src(i * length, length));
+    if(tail)
+        tmp.push_back(src(amount * length, tail));
+
     return tmp;
 }
 
 ByteBlock join_blocks(const vector<ByteBlock> & blocks) {
-    size_t amount_of_blocks = blocks.size();
-    size_t length_of_blocks;
-    if(amount_of_blocks) length_of_blocks = blocks[0].size();
+    if(blocks.empty()) return ByteBlock();
 
-    ByteBlock tmp(amount_of_blocks * length_of_blocks);
-    for(int i = 0; i < blocks.size(); i++) {
-        memcpy(tmp + i * length_of_blocks, blocks[i], length_of_blocks);
+    size_t size_vector = blocks.size();
+    size_t size_block = blocks[0].size();
+    size_t size_last = blocks[size_vector - 1].size();
+    size_t size_byteblock = (size_vector - 1) * size_block + size_last;
+
+    ByteBlock tmp(size_byteblock);
+    for(int i = 0; i < size_vector - 1; i++) {
+        memcpy(tmp + i * size_block, blocks[i], size_block);
     }
+    memcpy(tmp + (size_vector - 1) * size_block, blocks[size_vector - 1], size_last);
+
     return tmp;
 }
 

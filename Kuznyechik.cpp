@@ -1,3 +1,8 @@
+// WARNING!!!
+// None of the funcions defined above MUST NOT be used in any
+// context except the one which has been declared in the
+// appropriate header file "Kuznyechik.hpp"
+
 #include <stdexcept>
 
 #include <vector>
@@ -12,7 +17,6 @@ using std::endl;
 
 #include "Kuznyechik.hpp"
 #include "mycrypto.hpp"
-
 
 bool Kuznyechik::is_init = false;
 
@@ -75,7 +79,7 @@ Kuznyechik::Kuznyechik(const ByteBlock & key) :
     keys(10)
 {
     if(key.size() != 32)
-        throw std::invalid_argument("The key must be 32 bytes long");
+        throw std::invalid_argument("Kuznyechik: The key must be 32 bytes long");
     if(!is_init) {
         init_perms();
         init_consts();
@@ -93,13 +97,13 @@ Kuznyechik::~Kuznyechik() {}
 
 void Kuznyechik::encrypt(const ByteBlock & src, ByteBlock & dst) const {
     if(src.size() != BLOCK_LENGTH)
-        throw std::invalid_argument("The block must be 16 bytes length");
+        throw std::invalid_argument("Kuznyechik: The block must be 16 bytes length");
     if(dst != src) dst = src.deep_copy();
     encrypt128(dst, keys);
 }
 void Kuznyechik::decrypt(const ByteBlock & src, ByteBlock & dst) const {
     if(src.size() != BLOCK_LENGTH)
-        throw std::invalid_argument("The block must be 16 bytes length");
+        throw std::invalid_argument("Kuznyechik: The block must be 16 bytes length");
     if(dst != src) dst = src.deep_copy();
     decrypt128(dst, keys);
 }
