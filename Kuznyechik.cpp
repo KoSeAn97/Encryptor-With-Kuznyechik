@@ -93,6 +93,11 @@ Kuznyechik::Kuznyechik(const ByteBlock & key) :
         key_derivation128(keys[2 * i], keys[2 * i + 1], keys[2 * i + 2], keys[2 * i + 3], i);
     }
 }
+Kuznyechik::Kuznyechik(const Kuznyechik & rhs) {
+	is_init = rhs.is_init;
+	for(auto & iter_key : rhs.keys)
+		keys.push_back(iter_key.deep_copy());
+}
 Kuznyechik::~Kuznyechik() {}
 
 void Kuznyechik::encrypt(const ByteBlock & src, ByteBlock & dst) const {
@@ -136,20 +141,12 @@ void xor128(BYTE * dst, const BYTE * lhs, const BYTE * rhs) {
 	}
 }
 WORD multiply(WORD lhs, WORD rhs) {
-    WORD detecter = 0x1, result = 0;
-    for(int i = 0; i < 8; i++) {
-        if(rhs & detecter) result ^= lhs << i;
-        detecter <<= 1;
-    }
-    for(int j = 8; j > 0; j--) {
-        WORD detecter2 = detecter;
-        for(int i = 0; i < j; i++) {
-            if(result & detecter2)
-                result ^= linear_transform_modulus << i;
-            detecter2 <<= 1;
-        }
-    }
-    return result;
+	WORD result = 0, modulus = linear_transform_modulus << 7;
+	for(WORD detecter = 0x1; detecter != 0x100; detecter <<= 1, lhs <<= 1)
+		if(rhs & detecter) result ^= lhs;
+	for(WORD detecter = 0x8000; detecter != 0x80; detecter >>= 1, modulus >>= 1)
+		if(result & detecter) result ^= modulus;
+	return result;
 }
 void nonlinear_transform_direct128(BYTE * target) {
 	BYTE * p_end = target + BLOCK_LENGTH;

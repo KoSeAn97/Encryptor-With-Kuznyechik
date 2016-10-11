@@ -13,11 +13,7 @@ public:
 	static const int block_lenght {BLOCK_LENGTH};
 
 	Kuznyechik(const ByteBlock & key);
-    Kuznyechik(const Kuznyechik & rhs) {
-        is_init = rhs.is_init;
-        for(auto & iter_key : rhs.keys)
-            keys.push_back(iter_key.deep_copy());
-    }
+    Kuznyechik(const Kuznyechik & rhs);
 	~Kuznyechik();
 	void encrypt(const ByteBlock & src, ByteBlock & dst) const;
 	void decrypt(const ByteBlock & src, ByteBlock & dst) const;
