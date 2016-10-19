@@ -17,38 +17,11 @@ using std::numeric_limits;
 
 #include <stdexcept>
 
+#include "argvparser.h"
+using namespace CommandLineProcessing;
+
 #include "Kuznyechik.hpp"
 #include "mycrypto.hpp"
-
-void print_help(const char * argv0) {
-	const char * usage =
-R"(where ACTION is:
---e
- for encrypt the message
---d
- for decrypt the message
-
-file format:
-KEY=<key-string>            : 32-length hex string
-IV=<iv-string>              : 32-length hex string
-INPUT=<plaintext-string>    : any hex string you like
-
-output file = ./kuznyechik_cfb_output.txt
-)";
-	cout << "Usage " << argv0 << " --path=<path_to_file> ACTION" << endl;
-	cout << usage;
-}
-
-void check_argc(int argc, int from, int to=numeric_limits<int>::max()) {
-	if(argc < from)
-		throw std::invalid_argument(
-			"too few arguments for operation"
-		);
-	if(argc > to)
-		throw std::invalid_argument(
-			"too many arguments for operation"
-		);
-}
 
 vector<string> split(const string & s, char ch) {
     vector<string> v;
@@ -68,6 +41,9 @@ vector<string> split(const string & s, char ch) {
 
 vector<string> read_cipher_params(const string & filename) {
 	std::ifstream fin(filename);
+	if(!fin.is_open()) {
+		throw std::invalid_argument("Cannot open source file");
+	}
 	vector<string> result, params {"KEY", "IV", "INPUT"};
 	for(auto & p : params) {
 		string tmp;
@@ -77,39 +53,58 @@ vector<string> read_cipher_params(const string & filename) {
 			throw std::invalid_argument("Bad file");
 		result.push_back(line[1]);
 	}
+	fin.close();
 	return result;
 }
 
 int main(int argc, char ** argv) {
 	try {
-		check_argc(argc, 2);
-		if(string(argv[1]) == "--help") {
-			print_help(argv[0]);
-			return 0;
-		}
-		check_argc(argc, 3, 3);
-		string filename(argv[1]);
-		string action(argv[2]);
+		ArgvParser cmd;
 
-		auto path_params = split(filename, '=');
-		if(path_params.size() != 2 || path_params[0] != "--path")
+		cmd.setIntroductoryDescription("Encryptor with Kuznyechik using CFB mode of encryption.");
+		cmd.setHelpOption("h", "help", "Print this message");
+
+		cmd.defineOption("path", "File with data to be processed on",
+			ArgvParser::OptionRequired | ArgvParser::OptionRequiresValue);
+		cmd.defineOption("dest", "File to write into",
+			ArgvParser::OptionRequiresValue);
+		cmd.defineOption("encrypt", "Encrypt the message");
+		cmd.defineOption("decrypt", "Decrypt the message");
+
+		cmd.defineOptionAlternative("path", "P");
+		cmd.defineOptionAlternative("dest", "D");
+		cmd.defineOptionAlternative("encrypt", "e");
+		cmd.defineOptionAlternative("decrypt", "d");
+
+		int parsing_result = cmd.parse(argc, argv);
+		if(parsing_result) {
 			throw std::invalid_argument(
-				string("Error in terminal parameters: ") + filename
+				cmd.parseErrorDescription(parsing_result)
 			);
-		filename = path_params[1];
+		}
 
-		bool is_enc;
-		if(action == "--e") {
-			is_enc = true;
-		} else if(action == "--d") {
-			is_enc = false;
+		string src_filename = cmd.optionValue("path");
+		string dst_filename;
+		if(cmd.foundOption("dest")) {
+			dst_filename = cmd.optionValue("dest");
 		} else {
-			throw std::invalid_argument(
-				string("Unknown action: ") + action
-			);
+			dst_filename = "kuznyechik_cfb_output.txt";
 		}
 
-		auto cipher_params = read_cipher_params(filename);
+		bool is_enc = cmd.foundOption("encrypt");
+		if(is_enc) {
+			if(cmd.foundOption("decrypt"))
+				throw std::invalid_argument(
+					"Only one action must be present"
+				);
+		} else {
+			if(!cmd.foundOption("decrypt"))
+				throw std::invalid_argument(
+					"At least one action must be present"
+				);
+		}
+
+		auto cipher_params = read_cipher_params(src_filename);
 		ByteBlock key = hex_to_bytes(cipher_params[0]);
 		ByteBlock iv = hex_to_bytes(cipher_params[1]);
 		ByteBlock message = hex_to_bytes(cipher_params[2]);
@@ -117,13 +112,17 @@ int main(int argc, char ** argv) {
 
 		CFB_Mode<Kuznyechik> encryptor(Kuznyechik(key), iv);
 
+
 		if(is_enc) {
 			encryptor.encrypt(message, output);
 		} else {
 			encryptor.decrypt(message, output);
 		}
 
-		std::ofstream fout("kuznyechik_cfb_output.txt");
+		std::ofstream fout(dst_filename);
+		if(!fout.is_open()) {
+			throw std::invalid_argument("Cannot open destiantion file");
+		}
 		fout << "KEY=" << cipher_params[0] << endl;
 		fout << "IV=" << cipher_params[1] << endl;
 		fout << "INPUT=" << cipher_params[2] << endl;
