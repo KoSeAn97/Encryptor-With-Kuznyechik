@@ -1,3 +1,5 @@
+#include <stdexcept>
+
 #include <sstream>
 using std::stringstream;
 
@@ -56,10 +58,10 @@ void ByteBlock::operator = (ByteBlock && rhs) {
     rhs.amount_of_bytes = 0;
 }
 
-ByteBlock::operator BYTE * () {
+BYTE * ByteBlock::byte_ptr() {
     return pBlocks;
 }
-ByteBlock::operator const BYTE * () const {
+const BYTE * ByteBlock::byte_ptr() const {
     return pBlocks;
 }
 
@@ -70,14 +72,26 @@ BYTE ByteBlock::operator [] (size_t index) const {
     return *(pBlocks + index);
 }
 
+bool ByteBlock::operator == (const ByteBlock & lhs) const {
+    return pBlocks == lhs.pBlocks;
+}
+bool ByteBlock::operator != (const ByteBlock & lhs) const {
+    return !(*this == lhs);
+}
+
 void ByteBlock::reset(const BYTE * pBlocks_, size_t size_) {
     if(pBlocks) {
         memset(pBlocks, 0, amount_of_bytes);
         delete [] pBlocks;
     }
-    pBlocks = new BYTE [size_];
-    memcpy(pBlocks, pBlocks_, size_);
-    amount_of_bytes = size_;
+    if(size_ && pBlocks_) {
+        pBlocks = new BYTE [size_];
+        memcpy(pBlocks, pBlocks_, size_);
+        amount_of_bytes = size_;
+    } else  {
+        pBlocks = nullptr;
+        amount_of_bytes = 0;
+    }
 }
 
 size_t ByteBlock::size() const {
@@ -89,8 +103,8 @@ ByteBlock ByteBlock::deep_copy() const {
 }
 
 ByteBlock ByteBlock::operator () (size_t begin, size_t length) const {
-    ByteBlock tmp(length);
-    memcpy(tmp, pBlocks + begin, length);
+    ByteBlock tmp;
+    tmp.reset(pBlocks + begin, length);
     return tmp;
 }
 
@@ -125,9 +139,17 @@ ByteBlock join_blocks(const vector<ByteBlock> & blocks) {
 
     ByteBlock tmp(size_byteblock);
     for(int i = 0; i < size_vector - 1; i++) {
-        memcpy(tmp + i * size_block, blocks[i], size_block);
+        memcpy(
+            tmp.byte_ptr() + i * size_block,
+            blocks[i].byte_ptr(),
+            size_block
+        );
     }
-    memcpy(tmp + (size_vector - 1) * size_block, blocks[size_vector - 1], size_last);
+    memcpy(
+        tmp.byte_ptr() + (size_vector - 1) * size_block,
+        blocks[size_vector - 1].byte_ptr(),
+        size_last
+    );
 
     return tmp;
 }

@@ -57,6 +57,10 @@ vector<string> read_cipher_params(const string & filename) {
 	return result;
 }
 
+bool logic_xor3(bool x, bool y, bool z) {
+    return (!x && !y && z) || (!x && y && !z) || (x && !y && !z);
+}
+
 int main(int argc, char ** argv) {
 	try {
 		ArgvParser cmd;
@@ -71,10 +75,13 @@ int main(int argc, char ** argv) {
 		cmd.defineOption("encrypt", "Encrypt the message");
 		cmd.defineOption("decrypt", "Decrypt the message");
 
+        cmd.defineOption("parallel-decrypt", "Decrypt the message with parallelizm");
+
 		cmd.defineOptionAlternative("path", "P");
 		cmd.defineOptionAlternative("dest", "D");
 		cmd.defineOptionAlternative("encrypt", "e");
 		cmd.defineOptionAlternative("decrypt", "d");
+        cmd.defineOptionAlternative("parallel-decrypt", "l");
 
 		int parsing_result = cmd.parse(argc, argv);
 		if(parsing_result) {
@@ -91,18 +98,15 @@ int main(int argc, char ** argv) {
 			dst_filename = "kuznyechik_cfb_output.txt";
 		}
 
-		bool is_enc = cmd.foundOption("encrypt");
-		if(is_enc) {
-			if(cmd.foundOption("decrypt"))
-				throw std::invalid_argument(
-					"Only one action must be present"
-				);
-		} else {
-			if(!cmd.foundOption("decrypt"))
-				throw std::invalid_argument(
-					"At least one action must be present"
-				);
-		}
+        if( !logic_xor3(
+                cmd.foundOption("encrypt"),
+                cmd.foundOption("decrypt"),
+                cmd.foundOption("parallel-decrypt")) )
+        {
+            throw std::invalid_argument(
+                "Only and at least one action must be present"
+            );
+        }
 
 		auto cipher_params = read_cipher_params(src_filename);
 		ByteBlock key = hex_to_bytes(cipher_params[0]);
@@ -113,11 +117,15 @@ int main(int argc, char ** argv) {
 		CFB_Mode<Kuznyechik> encryptor(Kuznyechik(key), iv);
 
 
-		if(is_enc) {
+		if(cmd.foundOption("encrypt")) {
 			encryptor.encrypt(message, output);
-		} else {
-			encryptor.decrypt(message, output);
-		}
+		} else if(cmd.foundOption("decrypt")) {
+            encryptor.decrypt(message, output);
+		} else if(cmd.foundOption("parallel-decrypt")) {
+            encryptor.parallel_decrypt(message, output);
+        } else {
+            output = std::move(message);
+        }
 
 		std::ofstream fout(dst_filename);
 		if(!fout.is_open()) {

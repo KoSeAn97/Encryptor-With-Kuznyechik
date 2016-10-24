@@ -33,12 +33,15 @@ public:
 
     // This cast may be convenient to use the ByteBlock
     // in functions which takes raw pointers as argument
-    operator BYTE * ();
-    operator const BYTE * () const;
+    BYTE * byte_ptr();
+    const BYTE * byte_ptr() const;
 
     // Indexing operator with evident functionality
     BYTE & operator [] (size_t index);
     BYTE operator [] (size_t index) const;
+
+	bool operator == (const ByteBlock & lhs) const;
+	bool operator != (const ByteBlock & lhs) const;
 
     // Replace body of the current block with pBlocks_
     // Old value will be zerod, and then, deleted
@@ -76,12 +79,16 @@ ByteBlock hex_to_bytes(string s);
 // and public member-data block_lenght
 template <typename CipherType>
 class CFB_Mode {
-    CipherType algorithm;
-    ByteBlock iv;
+    const CipherType algorithm;
+    const ByteBlock iv;
+
+	void decrypt_with_iv(const ByteBlock & src, ByteBlock & dst, const ByteBlock & iv_) const;
 public:
     CFB_Mode(const CipherType & alg, const ByteBlock & init_vec);
     void encrypt(const ByteBlock & src, ByteBlock & dst) const;
     void decrypt(const ByteBlock & src, ByteBlock & dst) const;
+
+	void parallel_decrypt(const ByteBlock & src, ByteBlock & dst) const;
 };
 
 // Implementations of modes of encryption
