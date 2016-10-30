@@ -12,6 +12,7 @@ using std::vector;
 using std::map;
 
 #include <iostream>
+#include <cstring>
 using std::cerr;
 using std::endl;
 

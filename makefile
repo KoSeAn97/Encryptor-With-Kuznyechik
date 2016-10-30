@@ -6,7 +6,7 @@ hdrs = Kuznyechik.hpp mycrypto.hpp argvparser.h
 objs = $(srcs:.cpp=.o)
 
 program: $(objs)
-	$(cxx) $^ -o $@
+	$(cxx) $^ -o $@ -lpthread
 main.o: main.cpp Kuznyechik.hpp mycrypto.hpp argvparser.h
 	$(cxx) $(cxxflags) $< -c -o $@
 Kuznyechik.o: Kuznyechik.cpp Kuznyechik.hpp mycrypto.hpp
