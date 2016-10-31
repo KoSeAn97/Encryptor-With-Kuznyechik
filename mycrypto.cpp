@@ -183,8 +183,8 @@ string hex_representation(const ByteBlock & bb) {
     getline(ss, result);
     return result;
 }
-ByteBlock hex_to_bytes(string s) {
-    if(s.size() % 2) s = "0" + s;
+ByteBlock hex_to_bytes(const string & s) {
+    if(s.size() % 2) throw std::invalid_argument("length of hex-string must be even number");
     int size = s.size() / 2;
 
     ByteBlock result(size);

@@ -70,7 +70,7 @@ void xor_blocks(ByteBlock & to_assign, const ByteBlock & lhs, const ByteBlock & 
 
 // Some I/O functions to work with hex representation of ByteBlock
 string hex_representation(const ByteBlock & bb);
-ByteBlock hex_to_bytes(string s);
+ByteBlock hex_to_bytes(const string & s);
 
 // Template class that provides implementation of Cipher Feadback mode
 // of operation with any block cipher (algorithm) which saticfy several
