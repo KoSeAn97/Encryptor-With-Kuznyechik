@@ -74,7 +74,7 @@ void CFB_Mode<CipherType>::parallel_decrypt(const ByteBlock & src, ByteBlock & d
         return;
     }
 
-    std::cerr << "Running " << num_threads << " threads." << endl;
+    std::cerr << "Running " << num_threads << " threads." << std::endl;
 
     unsigned long const block_size = (length / num_threads) * CipherType::block_lenght;
     std::vector<ByteBlock> init_vectors(num_threads);
